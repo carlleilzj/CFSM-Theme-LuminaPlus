@@ -75,6 +75,40 @@ export const LatencyPointSchema = z
 export type LatencyPoint = z.output<typeof LatencyPointSchema>;
 
 /**
+ * 三网回程路由的分类结果。后端用 Team Cymru 的 ASN 数据判断每台机器的
+ * 回程路径落在哪个运营商骨干上。
+ *
+ * status 语义：
+ * - `backbone`：命中该运营商骨干 ASN（如电信 4809/4134、联通 9929/4837、移动 58453/9808）
+ * - `destination_only`：只命中该运营商目的网段，没走骨干
+ * - `none`：整条路径都没出现该运营商的 ASN
+ * - `unknown`：没有路由数据（Agent 未上报或尚未分类）
+ *
+ * `label` 由后端直接给出可展示文案，主题不自行拼装。
+ */
+export const RouteCarrierSchema = z.object({
+  status: z
+    .enum(["backbone", "destination_only", "none", "unknown"])
+    .default("unknown"),
+  asn: nullableNumber,
+  name: z.string().nullish().catch(null),
+  label: looseString.default(""),
+  hit_hop: nullableNumber,
+});
+
+export type RouteCarrier = z.output<typeof RouteCarrierSchema>;
+
+export const RouteInfoSchema = z.object({
+  updated_at: looseNumber.default(0),
+  family: looseString.default("ipv4"),
+  ct: RouteCarrierSchema.optional(),
+  cu: RouteCarrierSchema.optional(),
+  cm: RouteCarrierSchema.optional(),
+});
+
+export type RouteInfo = z.output<typeof RouteInfoSchema>;
+
+/**
  * `/api/servers` 与 `/api/server` 的服务器对象。
  *
  * 单位约定（与后端一致）：`ram_*` / `swap_*` / `disk_*` 为 MiB，网络速率与累计量为字节，
@@ -129,6 +163,12 @@ export const CfsmServerSchema = z
     // Workers 2.8.3 Beta2 起下发的一小时探测窗口；旧版本没有这两个字段。
     ping: z.array(LatencyPointSchema).optional(),
     loss: z.array(LatencyPointSchema).optional(),
+    // IPv6 三网探测窗口（自建后端扩展）：结构与 ping/loss 一致，
+    // loss6 的 -1 表示「探测点不可用」（无 AAAA / 本机无 IPv6 出口），不是 100% 丢包。
+    ping6: z.array(LatencyPointSchema).optional(),
+    loss6: z.array(LatencyPointSchema).optional(),
+    // 三网回程路由分类结果（自建后端扩展）。旧后端不下发，读出来是 undefined。
+    route: RouteInfoSchema.optional(),
 
     ram_total: looseNumber.default(0),
     ram_used: looseNumber.default(0),
@@ -414,6 +454,10 @@ export interface NodeMetrics {
   diskIo: DiskIo | null;
   /** 各线路实时延迟/丢包（见 CARRIER_KEYS），缺测为 null。 */
   ping: CarrierPingSnapshot;
+  /** IPv6 三网（仅 ct/cu/cm）。unavailable 表示该探针不可用，应隐藏而非显示 100% 丢包。 */
+  ipv6Ping: Ipv6CarrierPing;
+  /** 三网回程分类；null 表示无数据。 */
+  route: RouteInfo | null;
   updatedAt: number;
 }
 
@@ -464,6 +508,25 @@ export type CarrierNames = Record<CarrierKey, string>;
 
 export type CarrierPingSnapshot = Record<CarrierKey, number | null> &
   Record<CarrierLossKey, number | null>;
+
+/** IPv6 三网只覆盖电信/联通/移动三家，没有 bd 与自定义槽位。 */
+export const IPV6_CARRIER_KEYS = ["ct", "cu", "cm"] as const;
+export type Ipv6CarrierKey = (typeof IPV6_CARRIER_KEYS)[number];
+
+export type Ipv6CarrierEntry = {
+  latency: number | null;
+  loss: number | null;
+  /** true = 探测点不可用（无 AAAA / 本机无 IPv6 出口），UI 应隐藏该行。 */
+  unavailable: boolean;
+};
+
+export type Ipv6CarrierPing = Record<Ipv6CarrierKey, Ipv6CarrierEntry>;
+
+export const EMPTY_IPV6_CARRIER_PING: Ipv6CarrierPing = {
+  ct: { latency: null, loss: null, unavailable: true },
+  cu: { latency: null, loss: null, unavailable: true },
+  cm: { latency: null, loss: null, unavailable: true },
+};
 
 export const EMPTY_CARRIER_PING: CarrierPingSnapshot = Object.freeze(
   Object.fromEntries([

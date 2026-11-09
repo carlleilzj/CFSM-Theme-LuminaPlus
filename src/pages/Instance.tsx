@@ -4,6 +4,8 @@ import { useParams, Link } from "react-router-dom";
 import { ChevronLeft } from "lucide-react";
 import "uplot/dist/uPlot.min.css";
 import { InstanceDetails } from "@/components/instance/InstanceDetails";
+import { RouteBackboneCard } from "@/components/instance/RouteBackboneCard";
+import { ThreeNetIpv6Panel } from "@/components/instance/ThreeNetIpv6Panel";
 import { PingChart } from "@/components/instance/PingChart";
 import { LoadChart } from "@/components/instance/LoadChart";
 import { Spinner } from "@/components/ui/Spinner";
@@ -12,9 +14,17 @@ import {
   buildPingTimeRangeOptions,
 } from "@/components/instance/chartShared";
 import { useAuth } from "@/hooks/useAuth";
-import { useNodeMeta, useNodeStoreStatus, useRealtimeFocus } from "@/hooks/useNode";
+import { useCarrierNames } from "@/hooks/usePublicConfig";
+import { useIpv6LatencyWindow } from "@/hooks/useIpv6LatencyWindow";
+import {
+  useNodeMeta,
+  useNodeMetrics,
+  useNodeStoreStatus,
+  useRealtimeFocus,
+} from "@/hooks/useNode";
 import { useThemeSettings } from "@/hooks/useThemeSettings";
 import { ANONYMOUS_MAX_HISTORY_HOURS } from "@/services/api";
+import { EMPTY_IPV6_CARRIER_PING } from "@/types/cfsm";
 
 // 1 小时：详情页每打开一次就是一趟 /api/history/all 全量行，默认档位越短后端读的行越少。
 const DEFAULT_PING_HOURS = 1;
@@ -54,6 +64,10 @@ export function Instance() {
   const themeSettings = useThemeSettings();
   const meta = useNodeMeta(uuid ?? "");
   const storeStatus = useNodeStoreStatus(Boolean(uuid));
+  const carrierNames = useCarrierNames();
+  // 详情页只订阅这一台的实时推送，IPv6 面板与回程卡片都读同一份 metrics。
+  const nodeMetrics = useNodeMetrics(uuid ?? "");
+  const ipv6Samples = useIpv6LatencyWindow(uuid ?? "");
   // 详情页只订阅这一台的实时推送（后端文档：详情页不要订阅全量再在前端过滤）。
   useRealtimeFocus(uuid);
   const [chartType, setChartType] = useState<"load" | "ping">("load");
@@ -149,6 +163,7 @@ export function Instance() {
         {t("common.back")}
       </Link>
       <InstanceDetails uuid={uuid} onNodeReady={alignCharts} />
+      <RouteBackboneCard route={nodeMetrics?.route ?? null} names={carrierNames} />
       <div ref={chartControlsRef} className="instance-chart-controls">
         <div className="instance-segmented">
           <button
@@ -211,6 +226,12 @@ export function Instance() {
           ) : null}
         </div>
       </div>
+      <ThreeNetIpv6Panel
+        samples={ipv6Samples}
+        live={nodeMetrics?.ipv6Ping ?? EMPTY_IPV6_CARRIER_PING}
+        windowHours={pingHours}
+        names={carrierNames}
+      />
     </div>
   );
 }

@@ -5,7 +5,9 @@ import {
   CARRIER_LOSS_KEYS,
   CfsmServerSchema,
   EMPTY_CARRIER_PING,
+  EMPTY_IPV6_CARRIER_PING,
   GpuEntrySchema,
+  IPV6_CARRIER_KEYS,
   type CarrierKey,
   type CarrierNames,
   type CarrierPingSnapshot,
@@ -17,7 +19,9 @@ import {
   type NodeInfo,
   type NodeMetrics,
   type PingRecord,
+  type Ipv6CarrierPing,
   type PingTask,
+  type RouteInfo,
 } from "@/types/cfsm";
 
 /** 后端内存/磁盘字段的单位是 MiB，流量配额是 GB。 */
@@ -482,6 +486,8 @@ export function toNodeMetrics(
     gpuName: gpuDisplayName(gpus),
     diskIo: server.disk ?? null,
     ping: previous && sameCarrierPing(previous.ping, ping) ? previous.ping : ping,
+    ipv6Ping: ipv6CarrierPingFromServer(server),
+    route: routeInfoFromServer(server),
     updatedAt,
   };
 
@@ -520,6 +526,8 @@ export function emptyNodeMetrics(info: NodeInfo, online: boolean | null): NodeMe
     gpuName: info.gpu_name,
     diskIo: null,
     ping: EMPTY_CARRIER_PING,
+    ipv6Ping: EMPTY_IPV6_CARRIER_PING,
+    route: null,
     updatedAt: 0,
   };
 }
@@ -705,4 +713,82 @@ export function inferIntervalSeconds(times: number[]): number | undefined {
   deltas.sort((a, b) => a - b);
   const median = deltas[Math.floor(deltas.length / 2)]!;
   return Math.max(1, Math.round(median / 1000));
+}
+
+/* ---------------------------------------------------------------------------
+ * IPv6 三网探测 + 三网回程（自建后端扩展，旧后端不含这些字段）
+ * ------------------------------------------------------------------------- */
+
+/**
+ * 解析 IPv6 三网的单条快照。
+ *
+ * 与 IPv4 的关键差异：`loss6 === -1` 是「探测点不可用」（目标无 AAAA 记录，
+ * 或本机没有 IPv6 出口），必须与「100% 丢包」区分开——前者应隐藏该行，
+ * 后者才是真实故障。
+ */
+export function ipv6CarrierPingFromServer(server: CfsmServer): Ipv6CarrierPing {
+  const row = server as unknown as Record<string, unknown>;
+  const out = { ...EMPTY_IPV6_CARRIER_PING };
+  for (const key of IPV6_CARRIER_KEYS) {
+    const loss = toNullableNumber(row[`loss6_${key}`]);
+    const unavailable = loss === -1;
+    out[key] = {
+      latency: unavailable ? null : toNullableNumber(row[`ping6_${key}`]),
+      loss: unavailable ? null : loss,
+      unavailable,
+    };
+  }
+  return out;
+}
+
+/** 是否至少有一家探到了有效数据（决定整块 IPv6 面板是否显示）。 */
+export function hasIpv6CarrierData(ping: Ipv6CarrierPing): boolean {
+  return IPV6_CARRIER_KEYS.some(
+    (key) => !ping[key].unavailable && ping[key].latency !== null,
+  );
+}
+
+/**
+ * 解析 IPv6 三网的探测窗口，结构与 `parseLatencyWindow` 一致，
+ * 但只有 ct/cu/cm 三家，且丢包 -1 要读成 unavailable。
+ */
+export function parseIpv6LatencyWindow(server: CfsmServer): PingLiveSample[] {
+  const pingPoints = Array.isArray(server.ping6) ? server.ping6 : [];
+  if (pingPoints.length === 0) return [];
+
+  const lossByTs = new Map<number, (typeof pingPoints)[number]>();
+  for (const point of Array.isArray(server.loss6) ? server.loss6 : []) {
+    const time = normalizeTimestamp(point.ts);
+    if (time > 0) lossByTs.set(time, point);
+  }
+
+  const out: PingLiveSample[] = [];
+  for (const point of pingPoints) {
+    const time = normalizeTimestamp(point.ts);
+    if (time <= 0) continue;
+    const loss = lossByTs.get(time);
+    const ping = { ...EMPTY_CARRIER_PING };
+    for (const key of IPV6_CARRIER_KEYS) {
+      const rawLoss = loss ? toNullableNumber(loss[key]) : null;
+      // -1 = 不可用：既不算超时也不算丢包，两者都留空，由 UI 隐藏该格。
+      const unavailable = rawLoss === -1;
+      const lossValue = unavailable ? null : rawLoss;
+      ping[key] = unavailable ? null : probeLatency(point[key], lossValue);
+      ping[CARRIER_LOSS_KEYS[key]] = lossValue;
+    }
+    out.push({ time, ping });
+  }
+  return out.sort((left, right) => left.time - right.time);
+}
+
+/** 回程卡片用的三家顺序与显示名。 */
+export const ROUTE_CARRIER_ORDER = ["ct", "cu", "cm"] as const;
+
+/**
+ * 取出回程分类结果。`updated_at` 为 0 或缺失时返回 null（前端显示「暂无路由数据」）。
+ */
+export function routeInfoFromServer(server: CfsmServer): RouteInfo | null {
+  const route = server.route;
+  if (!route || !route.updated_at) return null;
+  return route;
 }

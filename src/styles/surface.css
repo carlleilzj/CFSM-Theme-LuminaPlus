@@ -2351,3 +2351,236 @@ body::after {
     animation: none;
   }
 }
+
+/* ==========================================================================
+ * 三网回程 + 国内三网 IPv6（自建后端扩展）
+ * ========================================================================== */
+
+.route-back-card {
+  border: 1px solid var(--border-subtle);
+  border-radius: 16px;
+  background: var(--surface-elev);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.route-back-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.route-back-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.route-back-time {
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+.route-back-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.route-back-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.route-back-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+.route-back-dot.is-ct { background: var(--progress-cpu); }
+.route-back-dot.is-cu { background: var(--status-error); }
+.route-back-dot.is-cm { background: var(--status-success); }
+
+.route-back-name {
+  font-size: 12px;
+  color: var(--text-secondary);
+  flex: 0 0 auto;
+  min-width: 32px;
+}
+
+.route-back-arrow {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  flex: 0 0 auto;
+}
+
+.route-back-pill {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border-subtle);
+  background: var(--fill-tertiary);
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+/* 命中骨干：用强调色，视觉权重最高 */
+.route-back-pill.is-backbone {
+  border-color: color-mix(in srgb, var(--status-warning) 45%, transparent);
+  background: color-mix(in srgb, var(--status-warning) 16%, transparent);
+  color: var(--status-warning);
+  font-weight: 700;
+}
+
+.route-back-pill.is-destination_only,
+.route-back-pill.is-none {
+  color: var(--text-secondary);
+}
+
+.route-back-pill.is-unknown {
+  opacity: 0.6;
+}
+
+.route-back-placeholder {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.route-back-card.is-empty {
+  opacity: 0.75;
+}
+
+/* ---- 国内三网 IPv6 ---- */
+
+.ipv6-section {
+  border: 1px solid var(--border-subtle);
+  border-radius: 16px;
+  background: var(--surface-elev);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ipv6-section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ipv6-section-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.ipv6-section-meta {
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+.ipv6-section-body {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.ipv6-subcard {
+  min-width: 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  background: var(--surface-sunken);
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ipv6-subcard-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.ipv6-strip-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ipv6-strip-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.ipv6-strip-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.ipv6-strip-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+.ipv6-strip-dot.is-ct { background: var(--progress-cpu); }
+.ipv6-strip-dot.is-cu { background: var(--status-error); }
+.ipv6-strip-dot.is-cm { background: var(--status-success); }
+
+.ipv6-strip-name {
+  font-size: 11px;
+  color: var(--text-secondary);
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ipv6-strip-value {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  flex: 0 0 auto;
+}
+
+.ipv6-strip-buckets {
+  display: flex;
+  gap: 2px;
+  height: 14px;
+}
+
+.ipv6-strip-bucket {
+  flex: 1 1 0;
+  min-width: 2px;
+  border-radius: 2px;
+  background: var(--fill-tertiary);
+}
+
+/* 窄屏：两张子卡上下堆叠 */
+@media (max-width: 640px) {
+  .ipv6-section-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
